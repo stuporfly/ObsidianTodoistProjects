@@ -1,13 +1,15 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-
-// Remember to rename these classes and interfaces!
+import { App, Editor, FileManager, FileSystemAdapter, MarkdownView, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
+import { Project, TodoistApi } from "@doist/todoist-api-typescript"// Remember to rename these classes and interfaces!
+import { Console } from 'console';
 
 interface MyPluginSettings {
-	mySetting: string;
+	TodoistToken: string;
+	TodoistProjectFolder: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+	TodoistToken: 'default',
+	TodoistProjectFolder: 'Projects'
 }
 
 export default class MyPlugin extends Plugin {
@@ -75,7 +77,90 @@ export default class MyPlugin extends Plugin {
 		});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.registerInterval(window.setInterval(async () => {
+			console.log('setInterval');
+			var folder=	 this.app.vault.getAbstractFileByPath(normalizePath("/TodoistProjects/Home improvement/build Wall"));
+			console.log (folder);
+			const api = new TodoistApi(this.settings.TodoistToken);
+		if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder))
+			this.app.vault.createFolder(this.settings.TodoistProjectFolder);
+
+			api.getProjects()
+				.then((projects: Project[]) => {
+					var files = this.app.vault.getFiles();
+					var filesById: { [id: string] : TFile; } = {};
+					files.forEach(file => {
+						var Metadata = this.app.metadataCache.getFileCache(file);
+						// console.log(file.name+":")
+						// console.log(Metadata?.frontmatter?.TodoistId);
+if (Metadata?.frontmatter?.TodoistId)
+												filesById[Metadata?.frontmatter?.TodoistId]=file;
+						
+					});
+
+					projects.forEach(async element => {
+						var filepath = this.getPath(projects, element.id);
+						if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder+filepath))
+						await this.app.vault.createFolder(this.settings.TodoistProjectFolder+filepath);
+			
+						var filename = this.settings.TodoistProjectFolder +filepath+ '/' + element.name + '.md';
+
+						if (files.filter(file => file.path == filename).length == 0 ) {
+							if (!filesById[element.id])
+							{
+								await this.app.vault.create(filename, "---\nTodoistId: "+element.id+"\n---\n["+element.name+"](https://todoist.com/app/project/" + element.id + ")"
+								+"\n```todoist \n{\n\"name\": \""+element.name+"\", \"filter\": \"#" + element.name + "\"\n }\n```\n");
+							}
+							else
+							{
+								var oldPath = "/"+filesById[element.id].path.substring(0,filesById[element.id].path.length-(element.name+".md").length-1);
+								if (!(await this.app.vault.adapter.exists("/"+filename)) &&(await this.app.vault.adapter.exists("/"+filesById[element.id].path)))
+{								console.log("moving: "+ (filename));
+console.log (filesById[element.id]);
+console.log(filename);
+
+								await this.app.vault.rename(filesById[element.id],filename);
+								console.log("moved: "+ (filename));
+							
+								var folderToDelete=	 this.app.vault.getAbstractFileByPath(normalizePath(oldPath)) as TFolder;
+								var keepDeleting=true;
+								if (folderToDelete.children.length==0)
+{								while (keepDeleting)
+								{
+									console.log(keepDeleting);
+									var nextfolderToDelete=	 folderToDelete?.parent;
+										await this.app.vault.delete(folderToDelete!!);
+
+										folderToDelete=nextfolderToDelete!!;
+										if (folderToDelete.children.length>0)
+											keepDeleting=false;
+										console.log("next:");
+										console.log (folderToDelete);
+										console.log (folderToDelete.children.length);
+										console.log(keepDeleting);
+								}
+							}
+						}
+					}
+						}
+
+					});
+				})
+				.catch((error) => console.log(error))
+		}
+			, 10 * 1000));
+	}
+	getPath(projects: Project[], currentProjectId?: string): string {
+		var result = "";
+		if (currentProjectId) {
+			var currentProject = projects.find(p => p.id === currentProjectId);
+			if (currentProject?.parentId) {
+				let parentProj = projects.find((proj: Project) => proj.id === currentProject?.parentId);
+				result = this.getPath(projects, parentProj?.id) + "/"+parentProj?.name;
+			}
+		}
+		return result;
+
 	}
 
 	onunload() {
@@ -97,12 +182,12 @@ class SampleModal extends Modal {
 	}
 
 	onOpen() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.setText('Woah!');
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
@@ -116,22 +201,33 @@ class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', { text: 'Settings for my awesome plugin.' });
 
 		new Setting(containerEl)
-			.setName('Setting #1')
+			.setName('Todoist API Key')
 			.setDesc('It\'s a secret')
 			.addText(text => text
 				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setValue(this.plugin.settings.TodoistToken)
 				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.TodoistToken = value;
 					await this.plugin.saveSettings();
 				}));
+		new Setting(containerEl)
+			.setName('Todoist project Folder')
+			.setDesc('folder for projects')
+			.addText(text => text
+				.setPlaceholder('enter path')
+				.setValue(this.plugin.settings.TodoistProjectFolder)
+				.onChange(async (value) => {
+					this.plugin.settings.TodoistProjectFolder = value;
+					await this.plugin.saveSettings();
+				}));
+
 	}
 }
+
