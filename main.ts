@@ -72,21 +72,28 @@ export default class MyPlugin extends Plugin {
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+		// this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+		// 	console.log('click', evt);
+		// });
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
 		this.registerInterval(window.setInterval(async () => {
 			console.log('setInterval');
+		///	Object.entries(app.commands.commands).filter(([, val]) => val.name.includes("Reload app without saving")).forEach(([id]) => console.log(id))
+
+
+//My result:
+
+//app:reload
 			var folder=	 this.app.vault.getAbstractFileByPath(normalizePath("/TodoistProjects/Home improvement/build Wall"));
-			console.log (folder);
 			const api = new TodoistApi(this.settings.TodoistToken);
 		if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder))
 			this.app.vault.createFolder(this.settings.TodoistProjectFolder);
 
 			api.getProjects()
 				.then((projects: Project[]) => {
+					var 	reloadNeeded=false;
+					var cleanupDone=false;
 					var files = this.app.vault.getFiles();
 					var filesById: { [id: string] : TFile; } = {};
 					files.forEach(file => {
@@ -120,30 +127,25 @@ console.log (filesById[element.id]);
 console.log(filename);
 
 								await this.app.vault.rename(filesById[element.id],filename);
-								console.log("moved: "+ (filename));
 							
 								var folderToDelete=	 this.app.vault.getAbstractFileByPath(normalizePath(oldPath)) as TFolder;
 								var keepDeleting=true;
 								if (folderToDelete.children.length==0)
 {								while (keepDeleting)
 								{
-									console.log(keepDeleting);
 									var nextfolderToDelete=	 folderToDelete?.parent;
 										await this.app.vault.delete(folderToDelete!!);
-
+										reloadNeeded=true;
 										folderToDelete=nextfolderToDelete!!;
 										if (folderToDelete.children.length>0)
 											keepDeleting=false;
-										console.log("next:");
-										console.log (folderToDelete);
-										console.log (folderToDelete.children.length);
-										console.log(keepDeleting);
 								}
+
 							}
 						}
 					}
 						}
-
+cleanupDone=true;
 					});
 				})
 				.catch((error) => console.log(error))
@@ -162,7 +164,7 @@ console.log(filename);
 		return result;
 
 	}
-
+   
 	onunload() {
 
 	}
