@@ -1,15 +1,19 @@
 import { App, Editor, FileManager, FileSystemAdapter, FrontMatterCache, MarkdownView, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
 import { Project, TodoistApi } from "@doist/todoist-api-typescript"// Remember to rename these classes and interfaces!
 import { Console } from 'console';
-var PatienceDiff = require('patience-diff');
+const os = require('os')
 interface MyPluginSettings {
+	PrimarySyncDevice: string;
+	TodoistSyncFrequency: number;
 	TodoistToken: string;
 	TodoistProjectFolder: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	TodoistToken: 'default',
-	TodoistProjectFolder: 'Projects'
+	TodoistProjectFolder: 'Projects',
+	TodoistSyncFrequency:60,
+	PrimarySyncDevice:''
 }
 
 export default class MyPlugin extends Plugin {
@@ -82,15 +86,13 @@ export default class MyPlugin extends Plugin {
 await this.updateTodoistProjectFiles();
 console.log(new Date().toLocaleString()+': Todoist Project files updated');
 }
-			, 10 * 1000));
-
-			await this.updateTodoistProjectFiles();
+			, this.settings.TodoistSyncFrequency * 1000));
 
 	}
 	async updateTodoistProjectFiles()
 {
-			///	Object.entries(app.commands.commands).filter(([, val]) => val.name.includes("Reload app without saving")).forEach(([id]) => console.log(id))
-
+	if (os.hostname()===this.settings.PrimarySyncDevice ||this.settings.PrimarySyncDevice==='')
+{			///	Object.entries(app.commands.commands).filter(([, val]) => val.name.includes("Reload app without saving")).forEach(([id]) => console.log(id))
 
 //My result:
 
@@ -132,8 +134,8 @@ var currentfile:TFile;
 				{
 					var oldPath = "/"+filesById[element.id].path.substring(0,filesById[element.id].path.length-(element.name+".md").length-1);
 					if (!(await this.app.vault.adapter.exists("/"+filename)) &&(await this.app.vault.adapter.exists("/"+filesById[element.id].path)))
-{								console.log("moving: "+ (filename));
-
+{
+	
 					await this.app.vault.rename(filesById[element.id],filename);
 				
 					var folderToDelete=	 this.app.vault.getAbstractFileByPath(normalizePath(oldPath)) as TFolder;
@@ -187,6 +189,9 @@ var todooistId=Metadata?.frontmatter?.TodoistId;
 
 	})
 	.catch((error) => console.log(error))
+}
+else
+console.log("Not Primary sync device - skipping Todoist sync");
 }
 	getPath(projects: Project[], currentProjectId?: string): string {
 		var result = "";
@@ -274,17 +279,37 @@ class SampleSettingTab extends PluginSettingTab {
 					this.plugin.settings.TodoistToken = value;
 					await this.plugin.saveSettings();
 				}));
-		new Setting(containerEl)
-			.setName('Todoist project Folder')
-			.setDesc('folder for projects')
-			.addText(text => text
-				.setPlaceholder('enter path')
-				.setValue(this.plugin.settings.TodoistProjectFolder)
+				new Setting(containerEl)
+				.setName('Todoist project Folder')
+				.setDesc('folder for projects' )
+				.addText(text => text
+					.setPlaceholder('enter path')
+					.setValue(this.plugin.settings.TodoistProjectFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.TodoistProjectFolder = value;
+						await this.plugin.saveSettings();
+					}));
+					new Setting(containerEl)
+					.setName('Primary sync device')
+					.setDesc('if this field is set, projects will only sync on the device with this name. This is to prevent sync-problems if projects are updated on multiple devices. The name of this device is"' + os.hostname()+'".')
+					.addText(text => text
+						.setPlaceholder('')
+						.setValue(this.plugin.settings.PrimarySyncDevice)
+						.onChange(async (value) => {
+							this.plugin.settings.PrimarySyncDevice = value;
+							await this.plugin.saveSettings();
+						}));
+						new Setting(containerEl)
+			.setName('Todoist sync frequency in seconds')
+			.setDesc('Sync frequency in seconds')
+			.addText(Number => Number
+				.setPlaceholder("0")
+				.setValue(this.plugin.settings.TodoistSyncFrequency.toString())
 				.onChange(async (value) => {
-					this.plugin.settings.TodoistProjectFolder = value;
+					this.plugin.settings.TodoistSyncFrequency = parseInt(value);
 					await this.plugin.saveSettings();
 				}));
-
+	
 	}
 }
 
