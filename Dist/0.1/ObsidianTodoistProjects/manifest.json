@@ -6,6 +6,5 @@
 	"description": "This plugin synchronizes projects from Todoist, creating a note for each. The note created contains a list of tasks for that project (assuming you have the Todoist Plugin). I also recommend that you install the Folder Note plugin, but it is not strictly needed.",
 	"author": "Jonas Dam",
 	"authorUrl": "https://github.com/stuporfly/ObsidianTodoistProjects",
-	"fundingUrl": "https://obsidian.md/pricing",
-	"isDesktopOnly": false
+	"isDesktopOnly": true
 }
