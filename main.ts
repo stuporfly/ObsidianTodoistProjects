@@ -2,20 +2,20 @@ import { App, Editor, FileManager, FileSystemAdapter, FrontMatterCache, Markdown
 import { Project, TodoistApi } from "@doist/todoist-api-typescript"// Remember to rename these classes and interfaces!
 import { Console } from 'console';
 const os = require('os');
-var defaultTemplate="[{{projectName}}](https://todoist.com/app/project/{{projectId}})\n```todoist \n{\n\"name\": \"{{projectName}}\", \"filter\": \"#{{projectName}}\"\n }\n```\n";
+// var defaultTemplate="[{{projectName}}](https://todoist.com/app/project/{{projectId}})\n```todoist \n{\n\"name\": \"{{projectName}}\", \"filter\": \"#{{projectName}}\"\n }\n```\n";
 
 interface MyPluginSettings {
 	PrimarySyncDevice: string;
 	TodoistSyncFrequency: number;
 	TodoistToken: string;
 	TodoistProjectFolder: string;
-	TodoistPageTemplate:string;
+	// TodoistPageTemplate:string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	TodoistToken: 'default',
 	TodoistProjectFolder: 'Projects',
-	TodoistPageTemplate:defaultTemplate,
+	// TodoistPageTemplate:defaultTemplate,
 	TodoistSyncFrequency:60,
 	PrimarySyncDevice:''
 }
