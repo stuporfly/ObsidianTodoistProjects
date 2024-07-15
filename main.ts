@@ -2,7 +2,7 @@ import { App, Editor, FileManager, FileSystemAdapter, FrontMatterCache, Markdown
 import { Project, TodoistApi } from "@doist/todoist-api-typescript"// Remember to rename these classes and interfaces!
 import { Console } from 'console';
 const os = require('os');
-// var defaultTemplate="[{{projectName}}](https://todoist.com/app/project/{{projectId}})\n```todoist \n{\n\"name\": \"{{projectName}}\", \"filter\": \"#{{projectName}}\"\n }\n```\n";
+// var defaultTemplate="[{{projectName}}](https://todoist.com/app/project/{{projectId}})\n```todoist \n\"name\": \"{{projectName}}\"\n \"filter\": \"#{{projectName}}\"\n```\n";
 
 interface MyPluginSettings {
 	PrimarySyncDevice: string;
@@ -133,7 +133,7 @@ var currentfile:TFile;
 				if (!filesById[element.id])
 				{
 					await this.app.vault.create(filename, "---\nTodoistId: "+element.id+"\n---\n["+element.name+"](https://todoist.com/app/project/" + element.id + ")"
-					+"\n```todoist \n{\n\"name\": \""+element.name+"\", \"filter\": \"#" + element.name + "\"\n }\n```\n");
+					+"\n```todoist \n\"name\": \""+element.name+"\" \n\"filter\": \"#" + element.name + "\"\n```\n");
 				}
 				else
 				{
