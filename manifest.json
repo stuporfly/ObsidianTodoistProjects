@@ -1,7 +1,7 @@
 {
 	"id": "todoistprojectsync",
 	"name": "Todoist Project sync",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"minAppVersion": "0.15.0",
 	"description": "synchronizes projects from Todoist, creating a note for each.",
 	"author": "Jonas Dam",
