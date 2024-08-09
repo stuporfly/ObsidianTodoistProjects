@@ -1,5 +1,5 @@
 import { App, Editor, FileManager, FileSystemAdapter, FrontMatterCache, MarkdownView, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
-import { Project, TodoistApi } from "@doist/todoist-api-typescript"// Remember to rename these classes and interfaces!
+import { Project, TodoistApi } from "@doist/todoist-api-typescript"
 import { Console } from 'console';
 import * as os from 'os';
 interface TodoistProjectSyncSettings {
@@ -46,7 +46,7 @@ export default class TodoistProjectSync extends Plugin {
 			//My result:
 
 			//app:reload
-			var folder = this.app.vault.getAbstractFileByPath(normalizePath("/TodoistProjects/Home improvement/build Wall"));
+			const folder = this.app.vault.getAbstractFileByPath(normalizePath("/TodoistProjects/Home improvement/build Wall"));
 			const api = new TodoistApi(this.settings.TodoistToken);
 			if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder))
 				this.app.vault.createFolder(this.settings.TodoistProjectFolder);
@@ -87,8 +87,8 @@ export default class TodoistProjectSync extends Plugin {
 										if (folderToDelete.children.length == 0) {
 											while (keepDeleting) {
 												const nextfolderToDelete = folderToDelete?.parent;
-												await this.app.fileManager.trashFile(folderToDelete!!);
-												folderToDelete = nextfolderToDelete!!;
+												await this.app.fileManager.trashFile(folderToDelete!);
+												folderToDelete = nextfolderToDelete!;
 												if (folderToDelete.children.length > 0)
 													keepDeleting = false;
 											}
@@ -120,7 +120,8 @@ export default class TodoistProjectSync extends Plugin {
 						const projectNameFromMeta = Metadata?.frontmatter?.projectName;
 						const todooistId = Metadata?.frontmatter?.TodoistId;
 						if (!projectNameFromMeta)
-							await this.addYamlProp("projectName", file.name, file);
+							this.app.fileManager.processFrontMatter(file,fm=> fm["projectName"]=file.name)
+							// await this.addYamlProp("projectName", file.name, file);
 						await this.app.vault.rename(file, this.settings.TodoistProjectFolder + "/archive/" + todooistId + ".md");
 
 					});
@@ -143,24 +144,24 @@ export default class TodoistProjectSync extends Plugin {
 		return result;
 
 	}
-	public async addYamlProp(propName: string, propValue: string, file: TFile): Promise<void> {
-		const fileContent: string = await this.app.vault.read(file);
-		const isYamlEmpty: boolean = (this.app.metadataCache.getFileCache(file)?.frontmatter === undefined && !fileContent.match(/^-{3}\s*\n*\r*-{3}/));
+	// public async addYamlProp(propName: string, propValue: string, file: TFile): Promise<void> {
+	// 	const fileContent: string = await this.app.vault.read(file);
+	// 	const isYamlEmpty: boolean = (this.app.metadataCache.getFileCache(file)?.frontmatter === undefined && !fileContent.match(/^-{3}\s*\n*\r*-{3}/));
 
 
-		const splitContent = fileContent.split("\n");
-		if (isYamlEmpty) {
-			splitContent.unshift("---");
-			splitContent.unshift(`${propName}: ${propValue}`);
-			splitContent.unshift("---");
-		}
-		else {
-			splitContent.splice(1, 0, `${propName}: ${propValue}`);
-		}
+	// 	const splitContent = fileContent.split("\n");
+	// 	if (isYamlEmpty) {
+	// 		splitContent.unshift("---");
+	// 		splitContent.unshift(`${propName}: ${propValue}`);
+	// 		splitContent.unshift("---");
+	// 	}
+	// 	else {
+	// 		splitContent.splice(1, 0, `${propName}: ${propValue}`);
+	// 	}
 
-		const newFileContent = splitContent.join("\n");
-		await this.app.vault.modify(file, newFileContent);
-	}
+	// 	const newFileContent = splitContent.join("\n");
+	// 	await this.app.vault.modify(file, newFileContent);
+	// }
 
 	onunload() {
 
@@ -178,7 +179,7 @@ export default class TodoistProjectSync extends Plugin {
 
 class TodoistSettingTab extends PluginSettingTab {
 	plugin: TodoistProjectSync;
-
+ 
 	constructor(app: App, plugin: TodoistProjectSync) {
 		super(app, plugin);
 		this.plugin = plugin;
