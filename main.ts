@@ -1,6 +1,6 @@
 import { App, Editor, FileManager, FileSystemAdapter, FrontMatterCache, MarkdownView, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
 import { Project, TodoistApi } from "@doist/todoist-api-typescript"// Remember to rename these classes and interfaces!
-import { Console } from 'console';
+import { Console, error } from 'console';
 import * as os from 'os';
 interface TodoistProjectSyncSettings {
 	PrimarySyncDevice: string;
@@ -10,7 +10,7 @@ interface TodoistProjectSyncSettings {
 }
 
 const DEFAULT_SETTINGS: TodoistProjectSyncSettings = {
-	TodoistToken: 'default',
+	TodoistToken: '',
 	TodoistProjectFolder: 'Projects',
 	TodoistSyncFrequency: 60,
 	PrimarySyncDevice: ''
@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS: TodoistProjectSyncSettings = {
 
 export default class TodoistProjectSync extends Plugin {
 	settings: TodoistProjectSyncSettings;
+	refreshIntervalID: number;
+	todoistApi: TodoistApi;
 
 	async onload() {
 		await this.loadSettings();
@@ -32,104 +34,108 @@ export default class TodoistProjectSync extends Plugin {
 		// });
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(async () => {
-			console.log(new Date().toLocaleString() + ': Updating Todoist Project files');
-			await this.updateTodoistProjectFiles();
-			console.log(new Date().toLocaleString() + ': Todoist Project files updated');
-		}
-			, this.settings.TodoistSyncFrequency * 1000));
+		this.refreshIntervalID = this.setRefreshInterval();
+	}
+
+	setRefreshInterval(oldintervalId: number = -1): number {
+		if (oldintervalId > 0)
+			window.clearInterval(oldintervalId);
+		if (this.settings.TodoistSyncFrequency > 0)
+			return this.registerInterval(window.setInterval(async () => {
+				console.log(new Date().toLocaleString() + ': Updating Todoist Project files');
+				await this.updateTodoistProjectFiles();
+				console.log(new Date().toLocaleString() + ': Todoist Project files updated');
+			}
+				, this.settings.TodoistSyncFrequency * 1000));
+		return -1;
 
 	}
 	async updateTodoistProjectFiles() {
-		if (os.hostname() === this.settings.PrimarySyncDevice || this.settings.PrimarySyncDevice === '') {			///	Object.entries(app.commands.commands).filter(([, val]) => val.name.includes("Reload app without saving")).forEach(([id]) => console.log(id))
+		if (!(os.hostname() === this.settings.PrimarySyncDevice || this.settings.PrimarySyncDevice === '')) 			///	Object.entries(app.commands.commands).filter(([, val]) => val.name.includes("Reload app without saving")).forEach(([id]) => console.log(id))
+		{
+			console.log("Not Primary sync device - skipping Todoist sync");
+			return;
+		}
+		//app:reload
+		this.todoistApi = new TodoistApi(this.settings.TodoistToken);
+		if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder))
+			this.app.vault.createFolder(this.settings.TodoistProjectFolder);
+		try {
+			const projects = await this.todoistApi.getProjects();
 
-			//My result:
+			const files = this.app.vault.getMarkdownFiles();
+			const filesById: { [id: string]: TFile; } = {};
 
-			//app:reload
-			var folder = this.app.vault.getAbstractFileByPath(normalizePath("/TodoistProjects/Home improvement/build Wall"));
-			const api = new TodoistApi(this.settings.TodoistToken);
-			if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder))
-				this.app.vault.createFolder(this.settings.TodoistProjectFolder);
-			api.getProjects()
-				.then((projects: Project[]) => {
+			files.forEach(file => {
+				const Metadata = this.app.metadataCache.getFileCache(file);
+				if (Metadata?.frontmatter?.TodoistId)
+					filesById[Metadata?.frontmatter?.TodoistId] = file;
 
-					const files = this.app.vault.getFiles();
-					const filesById: { [id: string]: TFile; } = {};
+			});
+			const handledProjects: string[] = [];
+			projects.forEach(async element => {
+				handledProjects.push(element.id);
+				const filepath = this.getPath(projects, element.id);
+				if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder + filepath))
+					await this.app.vault.createFolder(this.settings.TodoistProjectFolder + filepath);
 
-					files.forEach(file => {
-						const Metadata = this.app.metadataCache.getFileCache(file);
-						if (Metadata?.frontmatter?.TodoistId)
-							filesById[Metadata?.frontmatter?.TodoistId] = file;
+				const filename = normalizePath(this.settings.TodoistProjectFolder + filepath + '/' + element.name + '.md');
 
-					});
-					const handledProjects: string[] = [];
-					projects.forEach(async element => {
-						handledProjects.push(element.id);
-						const filepath = this.getPath(projects, element.id);
-						if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder + filepath))
-							await this.app.vault.createFolder(this.settings.TodoistProjectFolder + filepath);
+				//					if (files.filter(file =>  file.path == filename).length == 0) {
+				if (!this.app.vault.getAbstractFileByPath(filename)) {
+					if (!filesById[element.id]) {
+						await this.app.vault.create(filename, "---\nTodoistId: " + element.id + "\n---\n[" + element.name + "](https://todoist.com/app/project/" + element.id + ")"
+							+ "\n```todoist \n\"name\": \"" + element.name + "\" \n\"filter\": \"#" + element.name + "\"\n```\n");
+					}
+					else {
+						const oldPath = "/" + filesById[element.id].path.substring(0, filesById[element.id].path.length - (element.name + ".md").length - 1);
+						if (!(await this.app.vault.adapter.exists("/" + filename)) && (await this.app.vault.adapter.exists("/" + filesById[element.id].path))) {
 
-						const filename = normalizePath(this.settings.TodoistProjectFolder + filepath + '/' + element.name + '.md');
-
-						if (files.filter(file => file.path == filename).length == 0) {
-							if (!filesById[element.id]) {
-								await this.app.vault.create(filename, "---\nTodoistId: " + element.id + "\n---\n[" + element.name + "](https://todoist.com/app/project/" + element.id + ")"
-									+ "\n```todoist \n\"name\": \"" + element.name + "\" \n\"filter\": \"#" + element.name + "\"\n```\n");
-							}
-							else {
-								const oldPath = "/" + filesById[element.id].path.substring(0, filesById[element.id].path.length - (element.name + ".md").length - 1);
-								if (!(await this.app.vault.adapter.exists("/" + filename)) && (await this.app.vault.adapter.exists("/" + filesById[element.id].path))) {
-
-									await this.app.vault.rename(filesById[element.id], filename);
-									if (this.app.vault.getAbstractFileByPath(normalizePath(oldPath)) instanceof TFolder) {
-										let folderToDelete = this.app.vault.getAbstractFileByPath(normalizePath(oldPath)) as TFolder;
-										let keepDeleting = true;
-										if (folderToDelete.children.length == 0) {
-											while (keepDeleting) {
-												const nextfolderToDelete = folderToDelete?.parent;
-												await this.app.fileManager.trashFile(folderToDelete!!);
-												folderToDelete = nextfolderToDelete!!;
-												if (folderToDelete.children.length > 0)
-													keepDeleting = false;
-											}
-
-										}
+							await this.app.vault.rename(filesById[element.id], filename);
+							if (this.app.vault.getAbstractFileByPath(normalizePath(oldPath)) instanceof TFolder) {
+								let folderToDelete = this.app.vault.getAbstractFileByPath(normalizePath(oldPath)) as TFolder;
+								let keepDeleting = true;
+								if (folderToDelete.children.length == 0) {
+									while (keepDeleting) {
+										const nextfolderToDelete = folderToDelete?.parent;
+										await this.app.fileManager.trashFile(folderToDelete!!);
+										folderToDelete = nextfolderToDelete!!;
+										if (folderToDelete.children.length > 0)
+											keepDeleting = false;
 									}
 								}
 							}
 						}
-					});
-					const filesToRemove: TFile[] = [];
+					}
+				}
+			});
+			const filesToRemove: TFile[] = [];
 
-					files.forEach(file => {
-						const Metadata = this.app.metadataCache.getFileCache(file);
-						if (Metadata?.frontmatter?.TodoistId) {
-							const todoistId: string = Metadata?.frontmatter?.TodoistId;
+			files.forEach(file => {
+				const Metadata = this.app.metadataCache.getFileCache(file);
+				if (Metadata?.frontmatter?.TodoistId) {
+					const todoistId: string = Metadata?.frontmatter?.TodoistId;
+					if (!handledProjects.contains(todoistId.toString())) {
+						filesToRemove.push(file);
+					}
+				}
+			})
+			filesToRemove.forEach(async file => {
+				if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder + "/archive"))
+					await this.app.vault.createFolder(this.settings.TodoistProjectFolder + "/archive");
 
+				const Metadata = this.app.metadataCache.getFileCache(file);
+				const projectNameFromMeta = Metadata?.frontmatter?.projectName;
+				const todooistId = Metadata?.frontmatter?.TodoistId;
+				if (!projectNameFromMeta)
+					await this.addYamlProp("projectName", file.name, file);
+				await this.app.vault.rename(file, this.settings.TodoistProjectFolder + "/archive/" + todooistId + ".md");
+			});
 
-							if (!handledProjects.contains(todoistId.toString())) {
-								filesToRemove.push(file);
-							}
-						}
-					})
-					filesToRemove.forEach(async file => {
-						if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder + "/archive"))
-							await this.app.vault.createFolder(this.settings.TodoistProjectFolder + "/archive");
-
-						const Metadata = this.app.metadataCache.getFileCache(file);
-						const projectNameFromMeta = Metadata?.frontmatter?.projectName;
-						const todooistId = Metadata?.frontmatter?.TodoistId;
-						if (!projectNameFromMeta)
-							await this.addYamlProp("projectName", file.name, file);
-						await this.app.vault.rename(file, this.settings.TodoistProjectFolder + "/archive/" + todooistId + ".md");
-
-					});
-
-				})
-				.catch((error) => console.log(error))
 		}
-		else
-			console.log("Not Primary sync device - skipping Todoist sync");
+		catch (error) {
+			console.log(error)
+		};
 	}
 	getPath(projects: Project[], currentProjectId?: string): string {
 		let result = "";
@@ -137,7 +143,10 @@ export default class TodoistProjectSync extends Plugin {
 			const currentProject = projects.find(p => p.id === currentProjectId);
 			if (currentProject?.parentId) {
 				const parentProj = projects.find((proj: Project) => proj.id === currentProject?.parentId);
-				result = this.getPath(projects, parentProj?.id) + "/" + parentProj?.name;
+				if (parentProj)
+					result = this.getPath(projects, parentProj?.id) + "/" + parentProj?.name;
+				else
+					throw new RangeError("Project tree structure in Todoist is malformed. Project with ID: " + currentProject.parentId + "Does not exist");
 			}
 		}
 		return result;
@@ -229,7 +238,10 @@ class TodoistSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.TodoistSyncFrequency.toString())
 				.onChange(async (value) => {
 					this.plugin.settings.TodoistSyncFrequency = parseInt(value);
+
 					await this.plugin.saveSettings();
+					this.plugin.refreshIntervalID = this.plugin.setRefreshInterval(this.plugin.refreshIntervalID);
+
 				}));
 
 	}
