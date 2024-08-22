@@ -103,6 +103,7 @@ export default class TodoistProjectSync extends Plugin {
 										folderToDelete = nextfolderToDelete!;
 										if (folderToDelete.children.length > 0)
 											keepDeleting = false;
+
 									}
 
 								}
@@ -135,7 +136,6 @@ export default class TodoistProjectSync extends Plugin {
 				await this.app.vault.rename(file, this.settings.TodoistProjectFolder + "/archive/" + todooistId + ".md");
 
 			});
-
 		}
 		catch (error) {
 			console.log(error)
@@ -191,7 +191,7 @@ export default class TodoistProjectSync extends Plugin {
 
 class TodoistSettingTab extends PluginSettingTab {
 	plugin: TodoistProjectSync;
-
+ 
 	constructor(app: App, plugin: TodoistProjectSync) {
 		super(app, plugin);
 		this.plugin = plugin;
