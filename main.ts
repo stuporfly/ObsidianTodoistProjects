@@ -75,13 +75,14 @@ export default class TodoistProjectSync extends Plugin {
 			const handledProjects: string[] = [];
 			projects.forEach(async element => {
 				handledProjects.push(element.id);
-				const filepath = this.getPath(projects, element.id);
+				let filepath = this.getPath(projects, element.id);
 				if (!await this.app.vault.adapter.exists(this.settings.TodoistProjectFolder + filepath))
 					await this.app.vault.createFolder(this.settings.TodoistProjectFolder + filepath);
-
+				//If a project has sub-projects, the note should be placed in the project folder, otherwise, it should be placed in the parent project folder.
+				if (projects.filter(p => p.parentId === element.id).length>0)
+					filepath = filepath +"/"+ element.name;
 				const filename = normalizePath(this.settings.TodoistProjectFolder + filepath + '/' + element.name + '.md');
 
-				//					if (files.filter(file =>  file.path == filename).length == 0) {
 				if (!this.app.vault.getAbstractFileByPath(filename)) {
 					if (!filesById[element.id]) {
 						await this.app.vault.create(filename, "---\nTodoistId: " + element.id + "\n---\n[" + element.name + "](https://todoist.com/app/project/" + element.id + ")"
@@ -98,11 +99,12 @@ export default class TodoistProjectSync extends Plugin {
 								if (folderToDelete.children.length == 0) {
 									while (keepDeleting) {
 										const nextfolderToDelete = folderToDelete?.parent;
-										await this.app.fileManager.trashFile(folderToDelete!!);
-										folderToDelete = nextfolderToDelete!!;
+										await this.app.fileManager.trashFile(folderToDelete!);
+										folderToDelete = nextfolderToDelete!;
 										if (folderToDelete.children.length > 0)
 											keepDeleting = false;
 									}
+
 								}
 							}
 						}
@@ -128,8 +130,10 @@ export default class TodoistProjectSync extends Plugin {
 				const projectNameFromMeta = Metadata?.frontmatter?.projectName;
 				const todooistId = Metadata?.frontmatter?.TodoistId;
 				if (!projectNameFromMeta)
-					await this.addYamlProp("projectName", file.name, file);
+					this.app.fileManager.processFrontMatter(file, fm => fm["projectName"] = file.name)
+				// await this.addYamlProp("projectName", file.name, file);
 				await this.app.vault.rename(file, this.settings.TodoistProjectFolder + "/archive/" + todooistId + ".md");
+
 			});
 
 		}
@@ -152,24 +156,24 @@ export default class TodoistProjectSync extends Plugin {
 		return result;
 
 	}
-	public async addYamlProp(propName: string, propValue: string, file: TFile): Promise<void> {
-		const fileContent: string = await this.app.vault.read(file);
-		const isYamlEmpty: boolean = (this.app.metadataCache.getFileCache(file)?.frontmatter === undefined && !fileContent.match(/^-{3}\s*\n*\r*-{3}/));
+	// public async addYamlProp(propName: string, propValue: string, file: TFile): Promise<void> {
+	// 	const fileContent: string = await this.app.vault.read(file);
+	// 	const isYamlEmpty: boolean = (this.app.metadataCache.getFileCache(file)?.frontmatter === undefined && !fileContent.match(/^-{3}\s*\n*\r*-{3}/));
 
 
-		const splitContent = fileContent.split("\n");
-		if (isYamlEmpty) {
-			splitContent.unshift("---");
-			splitContent.unshift(`${propName}: ${propValue}`);
-			splitContent.unshift("---");
-		}
-		else {
-			splitContent.splice(1, 0, `${propName}: ${propValue}`);
-		}
+	// 	const splitContent = fileContent.split("\n");
+	// 	if (isYamlEmpty) {
+	// 		splitContent.unshift("---");
+	// 		splitContent.unshift(`${propName}: ${propValue}`);
+	// 		splitContent.unshift("---");
+	// 	}
+	// 	else {
+	// 		splitContent.splice(1, 0, `${propName}: ${propValue}`);
+	// 	}
 
-		const newFileContent = splitContent.join("\n");
-		await this.app.vault.modify(file, newFileContent);
-	}
+	// 	const newFileContent = splitContent.join("\n");
+	// 	await this.app.vault.modify(file, newFileContent);
+	// }
 
 	onunload() {
 
