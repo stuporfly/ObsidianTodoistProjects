@@ -33,21 +33,19 @@ export default class TodoistProjectSync extends Plugin {
 		// 	console.log('click', evt);
 		// });
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.refreshIntervalID = this.setRefreshInterval();
+		this.setRefreshInterval();
 	}
 
-	setRefreshInterval(oldintervalId: number = -1): number {
-		if (oldintervalId > 0)
-			window.clearInterval(oldintervalId);
+	setRefreshInterval() {
+		if (this.refreshIntervalID > 0)
+			window.clearInterval(this.refreshIntervalID);
 		if (this.settings.TodoistSyncFrequency > 0)
-			return this.registerInterval(window.setInterval(async () => {
+			this.refreshIntervalID= this.registerInterval(window.setInterval(async () => {
 				console.log(new Date().toLocaleString() + ': Updating Todoist Project files');
 				await this.updateTodoistProjectFiles();
 				console.log(new Date().toLocaleString() + ': Todoist Project files updated');
 			}
 				, this.settings.TodoistSyncFrequency * 1000));
-		return -1;
 
 	}
 	async updateTodoistProjectFiles() {
@@ -148,7 +146,7 @@ export default class TodoistProjectSync extends Plugin {
 			if (currentProject?.parentId) {
 				const parentProj = projects.find((proj: Project) => proj.id === currentProject?.parentId);
 				if (parentProj)
-					result = this.getPath(projects, parentProj?.id) + "/" + parentProj?.name;
+					result = this.getPath(projects, parentProj.id) + "/" + parentProj.name;
 				else
 					throw new RangeError("Project tree structure in Todoist is malformed. Project with ID: " + currentProject.parentId + "Does not exist");
 			}
@@ -244,7 +242,7 @@ class TodoistSettingTab extends PluginSettingTab {
 					this.plugin.settings.TodoistSyncFrequency = parseInt(value);
 
 					await this.plugin.saveSettings();
-					this.plugin.refreshIntervalID = this.plugin.setRefreshInterval(this.plugin.refreshIntervalID);
+					this.plugin.setRefreshInterval();
 
 				}));
 
